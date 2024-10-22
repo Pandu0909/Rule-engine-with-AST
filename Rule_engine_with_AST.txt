@@ -1,0 +1,74 @@
+import ast
+import operator
+
+
+class SafeEvaluator(ast.NodeVisitor):
+    operators = {
+        ast.Eq: operator.eq,
+        ast.NotEq: operator.ne,
+        ast.Lt: operator.lt,
+        ast.LtE: operator.le,
+        ast.Gt: operator.gt,
+        ast.GtE: operator.ge,
+        ast.And: operator.and_,
+        ast.Or: operator.or_,
+    }
+
+    def __init__(self, data):
+        self.data = data
+
+    def visit_Name(self, node):
+        if node.id in self.data:
+            return self.data[node.id]
+        raise ValueError(f"Unknown variable: {node.id}")
+
+    def visit_Constant(self, node):
+        return node.value
+
+    def visit_Compare(self, node):
+        left = self.visit(node.left)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = self.visit(comparator)
+            if not self.operators[type(op)](left, right):
+                return False
+        return True
+
+    def visit_BoolOp(self, node):
+        if isinstance(node.op, ast.And):
+            return all(self.visit(value) for value in node.values)
+        elif isinstance(node.op, ast.Or):
+            return any(self.visit(value) for value in node.values)
+        else:
+            raise ValueError("Unsupported boolean operation")
+
+    def evaluate(self, expression):
+        tree = ast.parse(expression, mode='eval')
+        return self.visit(tree.body)
+
+
+class RuleEngine:
+    def evaluate(self, rule, data):
+        evaluator = SafeEvaluator(data)
+        return evaluator.evaluate(rule)
+
+
+if __name__ == "__main__":
+    engine = RuleEngine()
+
+    rule_1 = "age > 40 and department == 'HR'"
+    rule_2 = "salary > 50000 or experience > 5"
+    combined_rule = f"({rule_1}) or ({rule_2})"
+
+    data = {
+        "age": 35,
+        "department": "Sales",
+        "salary": 60000,
+        "experience": 6
+    }
+
+    result = engine.evaluate(combined_rule, data)
+    print(f"Evaluation result: {result}")
+
+    new_rule = "age > 30 and department == 'Sales'"
+    modified_result = engine.evaluate(new_rule, data)
+    print(f"Modified rule evaluation result: {modified_result}")
